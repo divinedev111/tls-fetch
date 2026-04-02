@@ -3,7 +3,12 @@ package tlsfetch
 import (
 	"log/slog"
 	"time"
+
+	"github.com/mukuln-official/tls-fetch/internal"
 )
+
+// PoolConfig is an alias for internal.PoolConfig exposed at the package level.
+type PoolConfig = internal.PoolConfig
 
 type Option func(*config)
 
@@ -29,13 +34,6 @@ func defaultConfig() *config {
 			IdleTimeout:     90 * time.Second,
 		},
 	}
-}
-
-type PoolConfig struct {
-	MaxConnsPerHost int
-	MaxIdleConns    int
-	IdleTimeout     time.Duration
-	TTL             time.Duration
 }
 
 func WithProfile(p BrowserProfile) Option {
