@@ -1,0 +1,24 @@
+{
+  "name": "Firefox128",
+  "tls": {
+    "client_hello_id": "HelloFirefox_120"
+  },
+  "h2": {
+    "settings": [
+      {"id": 1, "value": 65536},
+      {"id": 4, "value": 131072},
+      {"id": 5, "value": 16384}
+    ],
+    "window_update": 12517377,
+    "pseudo_header_order": [":method", ":path", ":authority", ":scheme"]
+  },
+  "headers": {
+    "order": [
+      "Host", "User-Agent", "Accept", "Accept-Language",
+      "Accept-Encoding", "Content-Type", "Content-Length",
+      "Connection", "Cookie", "Upgrade-Insecure-Requests",
+      "Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site",
+      "Sec-Fetch-User", "TE"
+    ]
+  }
+}
