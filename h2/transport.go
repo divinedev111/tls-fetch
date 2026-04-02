@@ -10,37 +10,21 @@ import (
 )
 
 // Transport manages HTTP/2 connections with custom initial framing.
-//
-// It writes custom SETTINGS, WINDOW_UPDATE, and PRIORITY frames before
-// handing the connection to the standard http2.ClientConn for request
-// round-tripping.
-//
-// Note: PseudoHeaderOrder in Config is recorded for fingerprint calculation
-// but not yet enforced on the wire. The standard http2 encoder hardcodes
-// the order as :authority, :method, :path, :scheme. Custom ordering
-// requires a forked HPACK encoder (planned for a future version).
+// PseudoHeaderOrder is recorded for fingerprint calculation but not yet
+// enforced on the wire (requires a forked HPACK encoder).
 type Transport struct {
 	config Config
 	mu     sync.Mutex
 	conns  map[string]*http2.ClientConn
 }
 
-// NewTransport returns an HTTP/2 transport that applies cfg when
-// establishing new connections.
+// NewTransport returns an HTTP/2 transport that applies cfg on new connections.
 func NewTransport(cfg Config) *Transport {
-	return &Transport{
-		config: cfg,
-		conns:  make(map[string]*http2.ClientConn),
-	}
+	return &Transport{config: cfg, conns: make(map[string]*http2.ClientConn)}
 }
 
-// RoundTrip sends req over the provided pre-dialed connection.
-// It reuses existing HTTP/2 client connections keyed by host, falling
-// back to creating a new one if none exists or the existing one has
-// become unusable.
-//
-// This is NOT the http.RoundTripper interface --- it accepts a
-// pre-established net.Conn alongside the request.
+// RoundTrip sends req over a pre-dialed connection. Not http.RoundTripper —
+// it takes a pre-established net.Conn alongside the request.
 func (t *Transport) RoundTrip(req *http.Request, tlsConn net.Conn) (*http.Response, error) {
 	addr := req.URL.Host
 	if addr == "" {
@@ -56,7 +40,6 @@ func (t *Transport) RoundTrip(req *http.Request, tlsConn net.Conn) (*http.Respon
 		if err == nil {
 			return resp, nil
 		}
-		// Connection went bad; remove and create a new one.
 		t.mu.Lock()
 		delete(t.conns, addr)
 		t.mu.Unlock()
@@ -74,24 +57,13 @@ func (t *Transport) RoundTrip(req *http.Request, tlsConn net.Conn) (*http.Respon
 	return cc.RoundTrip(req)
 }
 
-// newClientConn writes our custom initial frames then delegates to
-// http2.Transport.NewClientConn. The standard library will also write
-// its own preface and SETTINGS frame; the server processes both and
-// uses the latest value for each setting.
 func (t *Transport) newClientConn(conn net.Conn) (*http2.ClientConn, error) {
 	if err := WriteInitialFrames(conn, t.config); err != nil {
 		return nil, err
 	}
 
-	h2t := &http2.Transport{
-		AllowHTTP:          true,
-		DisableCompression: true,
-	}
-	cc, err := h2t.NewClientConn(conn)
-	if err != nil {
-		return nil, err
-	}
-	return cc, nil
+	h2t := &http2.Transport{AllowHTTP: true, DisableCompression: true}
+	return h2t.NewClientConn(conn)
 }
 
 // CloseIdleConnections closes all cached HTTP/2 client connections.

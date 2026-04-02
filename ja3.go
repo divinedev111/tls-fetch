@@ -8,11 +8,10 @@ import (
 	utls "github.com/refraction-networking/utls"
 )
 
-// ProfileFromJA3 parses a JA3 fingerprint string and returns a BrowserProfile
-// with a ClientHelloSpec built from the parsed fields.
+// ProfileFromJA3 parses a JA3 fingerprint string into a BrowserProfile.
 //
-// JA3 format: TLSVersion,Ciphers,Extensions,EllipticCurves,EllipticCurvePointFormats
-// Each field uses dash-separated decimal values.
+// Format: TLSVersion,Ciphers,Extensions,EllipticCurves,PointFormats
+// Fields are dash-separated decimal values.
 func ProfileFromJA3(ja3 string) (BrowserProfile, error) {
 	if ja3 == "" {
 		return BrowserProfile{}, &ErrInvalidJA3{Input: ja3, Reason: "empty string"}
@@ -22,11 +21,10 @@ func ProfileFromJA3(ja3 string) (BrowserProfile, error) {
 	if len(parts) != 5 {
 		return BrowserProfile{}, &ErrInvalidJA3{
 			Input:  ja3,
-			Reason: fmt.Sprintf("expected 5 comma-separated fields, got %d", len(parts)),
+			Reason: fmt.Sprintf("expected 5 fields, got %d", len(parts)),
 		}
 	}
 
-	// Field 0: TLS version
 	tlsVersion, err := strconv.ParseUint(parts[0], 10, 16)
 	if err != nil {
 		return BrowserProfile{}, &ErrInvalidJA3{
@@ -35,42 +33,26 @@ func ProfileFromJA3(ja3 string) (BrowserProfile, error) {
 		}
 	}
 
-	// Field 1: Cipher suites
-	ciphers, err := parseDashSeparatedUint16(parts[1])
+	ciphers, err := parseDashUint16(parts[1])
 	if err != nil {
-		return BrowserProfile{}, &ErrInvalidJA3{
-			Input:  ja3,
-			Reason: fmt.Sprintf("invalid cipher suites: %v", err),
-		}
+		return BrowserProfile{}, &ErrInvalidJA3{Input: ja3, Reason: fmt.Sprintf("ciphers: %v", err)}
 	}
-	ciphers = filterGREASE16(ciphers)
+	ciphers = filterGREASE(ciphers)
 
-	// Field 2: Extension IDs
-	extIDs, err := parseDashSeparatedUint16(parts[2])
+	extIDs, err := parseDashUint16(parts[2])
 	if err != nil {
-		return BrowserProfile{}, &ErrInvalidJA3{
-			Input:  ja3,
-			Reason: fmt.Sprintf("invalid extension IDs: %v", err),
-		}
+		return BrowserProfile{}, &ErrInvalidJA3{Input: ja3, Reason: fmt.Sprintf("extensions: %v", err)}
 	}
 
-	// Field 3: Elliptic curves (named groups)
-	curves, err := parseDashSeparatedUint16(parts[3])
+	curves, err := parseDashUint16(parts[3])
 	if err != nil {
-		return BrowserProfile{}, &ErrInvalidJA3{
-			Input:  ja3,
-			Reason: fmt.Sprintf("invalid elliptic curves: %v", err),
-		}
+		return BrowserProfile{}, &ErrInvalidJA3{Input: ja3, Reason: fmt.Sprintf("curves: %v", err)}
 	}
-	curves = filterGREASE16(curves)
+	curves = filterGREASE(curves)
 
-	// Field 4: EC point formats
-	pointFormats, err := parseDashSeparatedUint8(parts[4])
+	pointFormats, err := parseDashUint8(parts[4])
 	if err != nil {
-		return BrowserProfile{}, &ErrInvalidJA3{
-			Input:  ja3,
-			Reason: fmt.Sprintf("invalid point formats: %v", err),
-		}
+		return BrowserProfile{}, &ErrInvalidJA3{Input: ja3, Reason: fmt.Sprintf("point formats: %v", err)}
 	}
 
 	namedGroups := make([]utls.CurveID, len(curves))
@@ -78,32 +60,27 @@ func ProfileFromJA3(ja3 string) (BrowserProfile, error) {
 		namedGroups[i] = utls.CurveID(c)
 	}
 
-	extensions, err := buildExtensionsFromIDs(extIDs, namedGroups, pointFormats)
+	extensions, err := buildExtensions(extIDs, namedGroups, pointFormats)
 	if err != nil {
-		return BrowserProfile{}, &ErrInvalidJA3{
-			Input:  ja3,
-			Reason: fmt.Sprintf("building extensions: %v", err),
-		}
+		return BrowserProfile{}, &ErrInvalidJA3{Input: ja3, Reason: fmt.Sprintf("extensions: %v", err)}
 	}
 
 	spec := &utls.ClientHelloSpec{
 		TLSVersMin:         utls.VersionTLS10,
 		TLSVersMax:         uint16(tlsVersion),
 		CipherSuites:       ciphers,
-		CompressionMethods: []uint8{0}, // no compression
+		CompressionMethods: []uint8{0},
 		Extensions:         extensions,
 	}
 
 	return BrowserProfile{
-		Name:          "custom_ja3",
-		ClientHelloID: utls.HelloCustom,
+		Name:            "custom_ja3",
+		ClientHelloID:   utls.HelloCustom,
 		ClientHelloSpec: spec,
 	}, nil
 }
 
-// parseDashSeparatedUint16 splits a dash-delimited string of decimal integers
-// into a []uint16. An empty string returns an empty slice.
-func parseDashSeparatedUint16(s string) ([]uint16, error) {
+func parseDashUint16(s string) ([]uint16, error) {
 	if s == "" {
 		return []uint16{}, nil
 	}
@@ -119,9 +96,7 @@ func parseDashSeparatedUint16(s string) ([]uint16, error) {
 	return out, nil
 }
 
-// parseDashSeparatedUint8 splits a dash-delimited string of decimal integers
-// into a []uint8. An empty string returns an empty slice.
-func parseDashSeparatedUint8(s string) ([]uint8, error) {
+func parseDashUint8(s string) ([]uint8, error) {
 	if s == "" {
 		return []uint8{}, nil
 	}
@@ -137,89 +112,66 @@ func parseDashSeparatedUint8(s string) ([]uint8, error) {
 	return out, nil
 }
 
-// isGREASE16 reports whether v is a GREASE uint16 value.
-// GREASE values have identical high and low bytes, each with lowest nibble == 0xa.
-func isGREASE16(v uint16) bool {
+func isGREASE(v uint16) bool {
 	return ((v >> 8) == v&0xff) && v&0xf == 0xa
 }
 
-// filterGREASE16 removes all GREASE values from a []uint16 slice.
-func filterGREASE16(in []uint16) []uint16 {
-	out := in[:0:len(in)]
+func filterGREASE(in []uint16) []uint16 {
+	out := make([]uint16, 0, len(in))
 	for _, v := range in {
-		if !isGREASE16(v) {
+		if !isGREASE(v) {
 			out = append(out, v)
 		}
 	}
 	return out
 }
 
-// buildExtensionsFromIDs maps a list of JA3 extension IDs to the corresponding
-// uTLS TLSExtension implementations. Named groups and point formats are wired
-// into the appropriate extensions when their IDs appear.
-func buildExtensionsFromIDs(
-	ids []uint16,
-	curves []utls.CurveID,
-	pointFormats []uint8,
-) ([]utls.TLSExtension, error) {
+func buildExtensions(ids []uint16, curves []utls.CurveID, pointFormats []uint8) ([]utls.TLSExtension, error) {
 	exts := make([]utls.TLSExtension, 0, len(ids))
 	for _, id := range ids {
-		if isGREASE16(id) {
+		if isGREASE(id) {
 			exts = append(exts, &utls.UtlsGREASEExtension{})
 			continue
 		}
 		switch id {
-		case 0: // server_name
+		case 0:
 			exts = append(exts, &utls.SNIExtension{})
-		case 5: // status_request
+		case 5:
 			exts = append(exts, &utls.StatusRequestExtension{})
-		case 10: // supported_groups
+		case 10:
 			exts = append(exts, &utls.SupportedCurvesExtension{Curves: curves})
-		case 11: // ec_point_formats
+		case 11:
 			exts = append(exts, &utls.SupportedPointsExtension{SupportedPoints: pointFormats})
-		case 13: // signature_algorithms
+		case 13:
 			exts = append(exts, &utls.SignatureAlgorithmsExtension{
 				SupportedSignatureAlgorithms: []utls.SignatureScheme{
-					utls.ECDSAWithP256AndSHA256,
-					utls.PSSWithSHA256,
-					utls.PKCS1WithSHA256,
-					utls.ECDSAWithP384AndSHA384,
-					utls.PSSWithSHA384,
-					utls.PKCS1WithSHA384,
-					utls.PSSWithSHA512,
-					utls.PKCS1WithSHA512,
+					utls.ECDSAWithP256AndSHA256, utls.PSSWithSHA256, utls.PKCS1WithSHA256,
+					utls.ECDSAWithP384AndSHA384, utls.PSSWithSHA384, utls.PKCS1WithSHA384,
+					utls.PSSWithSHA512, utls.PKCS1WithSHA512,
 				},
 			})
-		case 16: // application_layer_protocol_negotiation
-			exts = append(exts, &utls.ALPNExtension{
-				AlpnProtocols: []string{"h2", "http/1.1"},
-			})
-		case 18: // signed_certificate_timestamp
+		case 16:
+			exts = append(exts, &utls.ALPNExtension{AlpnProtocols: []string{"h2", "http/1.1"}})
+		case 18:
 			exts = append(exts, &utls.SCTExtension{})
-		case 23: // extended_master_secret
+		case 23:
 			exts = append(exts, &utls.ExtendedMasterSecretExtension{})
-		case 27: // compress_certificate
+		case 27:
 			exts = append(exts, &utls.UtlsCompressCertExtension{})
-		case 35: // session_ticket
+		case 35:
 			exts = append(exts, &utls.SessionTicketExtension{})
-		case 43: // supported_versions
+		case 43:
 			exts = append(exts, &utls.SupportedVersionsExtension{
 				Versions: []uint16{utls.VersionTLS13, utls.VersionTLS12},
 			})
-		case 45: // psk_key_exchange_modes
-			exts = append(exts, &utls.PSKKeyExchangeModesExtension{
-				Modes: []uint8{utls.PskModeDHE},
-			})
-		case 51: // key_share
+		case 45:
+			exts = append(exts, &utls.PSKKeyExchangeModesExtension{Modes: []uint8{utls.PskModeDHE}})
+		case 51:
 			exts = append(exts, &utls.KeyShareExtension{
-				KeyShares: []utls.KeyShare{
-					{Group: utls.CurveX25519},
-				},
+				KeyShares: []utls.KeyShare{{Group: utls.CurveX25519}},
 			})
-		case 65281: // renegotiation_info (0xff01)
-			exts = append(exts, &utls.RenegotiationInfoExtension{
-				Renegotiation: utls.RenegotiateOnceAsClient,
-			})
+		case 65281:
+			exts = append(exts, &utls.RenegotiationInfoExtension{Renegotiation: utls.RenegotiateOnceAsClient})
 		default:
 			exts = append(exts, &utls.GenericExtension{Id: id})
 		}

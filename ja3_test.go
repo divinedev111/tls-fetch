@@ -54,7 +54,7 @@ func TestParseJA3_GREASEStripped(t *testing.T) {
 	}
 
 	for _, c := range p.ClientHelloSpec.CipherSuites {
-		if isGREASE16(c) {
+		if isGREASE(c) {
 			t.Errorf("found GREASE value 0x%04x in CipherSuites", c)
 		}
 	}

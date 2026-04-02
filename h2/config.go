@@ -1,10 +1,6 @@
 package h2
 
-// Config holds HTTP/2 connection parameters used for fingerprinting.
-// Settings, WindowUpdate, and Priorities control the initial frames
-// sent on a new HTTP/2 connection. PseudoHeaderOrder controls the
-// order of pseudo-headers in HEADERS frames (customisation requires
-// a forked HPACK encoder and is not yet wired up).
+// Config holds HTTP/2 fingerprint parameters for a connection.
 type Config struct {
 	Settings          []Setting
 	WindowUpdate      uint32
@@ -12,7 +8,7 @@ type Config struct {
 	PseudoHeaderOrder [4]string
 }
 
-// Setting is a single HTTP/2 SETTINGS parameter (id + value).
+// Setting is a single HTTP/2 SETTINGS parameter.
 type Setting struct {
 	ID    uint16
 	Value uint32

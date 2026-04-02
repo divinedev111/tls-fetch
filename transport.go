@@ -17,9 +17,7 @@ import (
 	utls "github.com/refraction-networking/utls"
 )
 
-// Transport is an http.RoundTripper that performs TLS handshakes with
-// browser-specific ClientHello fingerprints and routes HTTP/2 traffic
-// through a custom h2.Transport that sends fingerprinted initial frames.
+// Transport is an http.RoundTripper with TLS and HTTP/2 fingerprinting.
 type Transport struct {
 	profile            BrowserProfile
 	dialer             proxy.Dialer
@@ -27,15 +25,10 @@ type Transport struct {
 	h2t                *h2.Transport
 	logger             *slog.Logger
 	insecureSkipVerify bool
-
-	// mu guards the one-shot http1 transport cache (not strictly needed
-	// since each H1 request gets its own transport, but kept for safety).
-	mu sync.Mutex
+	mu                 sync.Mutex
 }
 
-// NewTransport creates a Transport from the given options.
-// At least one profile source (WithProfile, WithProfileFromFile, or
-// WithProfileFromJA3) must be provided.
+// NewTransport creates a fingerprinted Transport. At least one profile source must be provided.
 func NewTransport(opts ...Option) (*Transport, error) {
 	cfg := defaultConfig()
 	for _, o := range opts {
@@ -83,8 +76,7 @@ func NewTransport(opts ...Option) (*Transport, error) {
 	}, nil
 }
 
-// RoundTrip executes a single HTTP request with TLS fingerprinting.
-// It implements the http.RoundTripper interface.
+// RoundTrip implements http.RoundTripper.
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL == nil {
 		return nil, fmt.Errorf("tlsfetch: request has no URL")
@@ -95,19 +87,13 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	addr := req.URL.Host
 	if _, _, err := net.SplitHostPort(addr); err != nil {
-		// No port; default to 443 for https.
 		addr = net.JoinHostPort(addr, "443")
 	}
 
 	serverName := req.URL.Hostname()
-
 	ctx := req.Context()
 
-	t.logger.Debug("dialing TLS",
-		"host", serverName,
-		"addr", addr,
-		"profile", t.profile.Name,
-	)
+	t.logger.Debug("dialing TLS", "host", serverName, "addr", addr, "profile", t.profile.Name)
 
 	tlsConn, err := t.dialTLS(ctx, addr, serverName)
 	if err != nil {
@@ -115,11 +101,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	alpn := tlsConn.ConnectionState().NegotiatedProtocol
-
-	t.logger.Debug("TLS handshake complete",
-		"alpn", alpn,
-		"host", serverName,
-	)
+	t.logger.Debug("TLS handshake complete", "alpn", alpn, "host", serverName)
 
 	switch alpn {
 	case "h2":
@@ -129,20 +111,17 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 }
 
-// PoolStats returns a snapshot of the connection pool state.
+// PoolStats returns a snapshot of the connection pool.
 func (t *Transport) PoolStats() internal.PoolStats {
 	return t.pool.Stats()
 }
 
-// CloseIdleConnections closes all idle connections in both the pool and
-// the h2 transport.
+// CloseIdleConnections closes all idle connections.
 func (t *Transport) CloseIdleConnections() {
 	t.pool.Close()
 	t.h2t.CloseIdleConnections()
 }
 
-// resolveProfile picks a BrowserProfile from the config, checking in order:
-// direct profile, file path, JA3 string.
 func resolveProfile(cfg *config) (*BrowserProfile, error) {
 	if cfg.profile != nil {
 		return cfg.profile, nil
@@ -164,8 +143,6 @@ func resolveProfile(cfg *config) (*BrowserProfile, error) {
 	return nil, fmt.Errorf("tlsfetch: no browser profile configured (use WithProfile, WithProfileFromFile, or WithProfileFromJA3)")
 }
 
-// dialTLS dials a TCP connection through the configured proxy (or directly),
-// then performs a TLS handshake using the profile's uTLS ClientHello.
 func (t *Transport) dialTLS(ctx context.Context, addr, serverName string) (*utls.UConn, error) {
 	rawConn, err := t.dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -196,30 +173,23 @@ func (t *Transport) dialTLS(ctx context.Context, addr, serverName string) (*utls
 	return uconn, nil
 }
 
-// roundTripH2 delegates the request to the h2.Transport with the pre-dialed
-// TLS connection.
 func (t *Transport) roundTripH2(req *http.Request, tlsConn *utls.UConn) (*http.Response, error) {
-	// h2.Transport.RoundTrip accepts net.Conn; *utls.UConn satisfies it.
 	return t.h2t.RoundTrip(req, tlsConn)
 }
 
-// roundTripH1 sends the request over HTTP/1.1 using a one-shot stdlib
-// http.Transport that returns our pre-dialed, header-reordering connection.
+// roundTripH1 uses a one-shot stdlib transport with a pre-dialed, header-reordering conn.
 func (t *Transport) roundTripH1(req *http.Request, tlsConn *utls.UConn) (*http.Response, error) {
 	var reorderConn net.Conn = tlsConn
 	if len(t.profile.HeaderOrder) > 0 {
 		reorderConn = header.NewReorderConn(tlsConn, t.profile.HeaderOrder)
 	}
 
-	// used tracks whether the pre-dialed conn has been handed out.
-	// The stdlib transport calls DialTLSContext once; we give it ours.
+	// sync.Once ensures the pre-dialed conn is handed out exactly once.
 	var once sync.Once
 	used := false
 
 	stdTransport := &http.Transport{
-		// Disable keep-alives so the stdlib transport doesn't try to reuse.
 		DisableKeepAlives: true,
-		// Provide our pre-dialed TLS connection.
 		DialTLSContext: func(_ context.Context, network, addr string) (net.Conn, error) {
 			var conn net.Conn
 			once.Do(func() {
@@ -231,10 +201,7 @@ func (t *Transport) roundTripH1(req *http.Request, tlsConn *utls.UConn) (*http.R
 			}
 			return nil, fmt.Errorf("tlsfetch: H1 transport already consumed the pre-dialed connection")
 		},
-		// Force HTTP/1.1 — do not negotiate h2 on this transport.
-		TLSClientConfig: &tls.Config{
-			NextProtos: []string{"http/1.1"},
-		},
+		TLSClientConfig:  &tls.Config{NextProtos: []string{"http/1.1"}},
 		ForceAttemptHTTP2: false,
 	}
 	defer stdTransport.CloseIdleConnections()
@@ -249,7 +216,6 @@ func (t *Transport) roundTripH1(req *http.Request, tlsConn *utls.UConn) (*http.R
 	return resp, nil
 }
 
-// toH2Settings converts the package-level H2Setting slice to the h2 sub-package type.
 func toH2Settings(settings []H2Setting) []h2.Setting {
 	out := make([]h2.Setting, len(settings))
 	for i, s := range settings {
@@ -258,7 +224,6 @@ func toH2Settings(settings []H2Setting) []h2.Setting {
 	return out
 }
 
-// toH2Priorities converts the package-level H2Priority slice to the h2 sub-package type.
 func toH2Priorities(priorities []H2Priority) []h2.Priority {
 	out := make([]h2.Priority, len(priorities))
 	for i, p := range priorities {

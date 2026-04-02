@@ -11,15 +11,11 @@ const (
 	frameWindowUpdate = 0x08
 )
 
-// writeHTTP2Preface writes the HTTP/2 connection preface.
 func writeHTTP2Preface(w io.Writer) error {
 	_, err := io.WriteString(w, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
 	return err
 }
 
-// writeFrameHeader writes a 9-byte HTTP/2 frame header.
-// length is the payload length (24-bit), frameType identifies the frame,
-// flags holds frame flags, and streamID identifies the stream.
 func writeFrameHeader(w io.Writer, length uint32, frameType uint8, flags uint8, streamID uint32) error {
 	var hdr [9]byte
 	hdr[0] = byte(length >> 16)
@@ -32,8 +28,6 @@ func writeFrameHeader(w io.Writer, length uint32, frameType uint8, flags uint8, 
 	return err
 }
 
-// writeSettingsFrame writes a SETTINGS frame (type 0x04) on stream 0.
-// Each setting is 6 bytes: 2-byte identifier + 4-byte value.
 func writeSettingsFrame(w io.Writer, settings []Setting) error {
 	payloadLen := uint32(len(settings) * 6)
 	if err := writeFrameHeader(w, payloadLen, frameSettings, 0x00, 0); err != nil {
@@ -50,9 +44,6 @@ func writeSettingsFrame(w io.Writer, settings []Setting) error {
 	return nil
 }
 
-// writeWindowUpdateFrame writes a WINDOW_UPDATE frame (type 0x08).
-// The payload is a single 4-byte unsigned integer representing the
-// window size increment.
 func writeWindowUpdateFrame(w io.Writer, streamID uint32, increment uint32) error {
 	if err := writeFrameHeader(w, 4, frameWindowUpdate, 0x00, streamID); err != nil {
 		return err
@@ -63,9 +54,6 @@ func writeWindowUpdateFrame(w io.Writer, streamID uint32, increment uint32) erro
 	return err
 }
 
-// writePriorityFrame writes a PRIORITY frame (type 0x02).
-// The payload is 5 bytes: 4-byte stream dependency (with exclusive bit)
-// + 1-byte weight.
 func writePriorityFrame(w io.Writer, p Priority) error {
 	if err := writeFrameHeader(w, 5, framePriority, 0x00, p.StreamID); err != nil {
 		return err
@@ -81,8 +69,8 @@ func writePriorityFrame(w io.Writer, p Priority) error {
 	return err
 }
 
-// WriteInitialFrames writes the full HTTP/2 connection preface followed
-// by SETTINGS, WINDOW_UPDATE (if non-zero), and PRIORITY frames in order.
+// WriteInitialFrames writes the HTTP/2 connection preface followed by
+// SETTINGS, WINDOW_UPDATE, and PRIORITY frames.
 func WriteInitialFrames(w io.Writer, cfg Config) error {
 	if err := writeHTTP2Preface(w); err != nil {
 		return err
