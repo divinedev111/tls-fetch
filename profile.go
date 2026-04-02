@@ -26,7 +26,7 @@ type BrowserProfile struct {
 }
 
 var Chrome131 = BrowserProfile{
-	Name:          "Chrome131",
+	Name:          "chrome_131",
 	ClientHelloID: utls.HelloChrome_131,
 	H2Settings: []H2Setting{
 		{ID: 1, Value: 65536},
@@ -48,7 +48,7 @@ var Chrome131 = BrowserProfile{
 }
 
 var Firefox128 = BrowserProfile{
-	Name:          "Firefox128",
+	Name:          "firefox_128",
 	ClientHelloID: utls.HelloFirefox_120,
 	H2Settings: []H2Setting{
 		{ID: 1, Value: 65536},
@@ -77,7 +77,7 @@ var Firefox128 = BrowserProfile{
 }
 
 var Safari18 = BrowserProfile{
-	Name:          "Safari18",
+	Name:          "safari_18",
 	ClientHelloID: utls.HelloSafari_Auto,
 	H2Settings: []H2Setting{
 		{ID: 4, Value: 4194304},
@@ -94,7 +94,7 @@ var Safari18 = BrowserProfile{
 }
 
 var Edge131 = BrowserProfile{
-	Name:          "Edge131",
+	Name:          "edge_131",
 	ClientHelloID: utls.HelloEdge_Auto,
 	H2Settings: []H2Setting{
 		{ID: 1, Value: 65536},

@@ -30,7 +30,7 @@ func TestResolveProfile_FromOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.Name != "Chrome131" {
+	if got.Name != "chrome_131" {
 		t.Fatalf("expected profile name Chrome131, got %q", got.Name)
 	}
 }

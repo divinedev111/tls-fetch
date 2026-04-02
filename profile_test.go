@@ -6,7 +6,7 @@ import (
 
 func TestBuiltinProfiles_NotNil(t *testing.T) {
 	profiles := []BrowserProfile{Chrome131, Firefox128, Safari18, Edge131}
-	names := []string{"Chrome131", "Firefox128", "Safari18", "Edge131"}
+	names := []string{"chrome_131", "firefox_128", "safari_18", "edge_131"}
 
 	for i, p := range profiles {
 		t.Run(names[i], func(t *testing.T) {

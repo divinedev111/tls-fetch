@@ -39,8 +39,8 @@ func TestPseudoHeaderShorthand(t *testing.T) {
 
 func TestValidateProfile_Chrome131(t *testing.T) {
 	r := ValidateProfile(Chrome131)
-	if r.Name != "Chrome131" {
-		t.Errorf("Name: got %q, want %q", r.Name, "Chrome131")
+	if r.Name != "chrome_131" {
+		t.Errorf("Name: got %q, want %q", r.Name, "chrome_131")
 	}
 	if r.H2Fingerprint == "" {
 		t.Error("H2Fingerprint is empty")

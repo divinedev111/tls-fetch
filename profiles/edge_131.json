@@ -1,5 +1,5 @@
 {
-  "name": "Edge131",
+  "name": "edge_131",
   "tls": {
     "client_hello_id": "HelloEdge_Auto"
   },

@@ -1,5 +1,5 @@
 {
-  "name": "Firefox128",
+  "name": "firefox_128",
   "tls": {
     "client_hello_id": "HelloFirefox_120"
   },

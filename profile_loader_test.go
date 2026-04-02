@@ -11,8 +11,8 @@ func TestLoadProfileFromFile_Chrome131(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if p.Name != "Chrome131" {
-		t.Errorf("Name: got %q, want %q", p.Name, "Chrome131")
+	if p.Name != "chrome_131" {
+		t.Errorf("Name: got %q, want %q", p.Name, "chrome_131")
 	}
 	if len(p.H2Settings) != 4 {
 		t.Errorf("H2Settings count: got %d, want 4", len(p.H2Settings))
