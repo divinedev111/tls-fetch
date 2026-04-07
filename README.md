@@ -1,3 +1,7 @@
+[![CI](https://github.com/divinedev111/tls-fetch/actions/workflows/ci.yml/badge.svg)](https://github.com/divinedev111/tls-fetch/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/divinedev111/tls-fetch)](https://goreportcard.com/report/github.com/divinedev111/tls-fetch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 # tls-fetch
 
 Go HTTP client with TLS fingerprinting. Standard `net/http` types. No forks.
