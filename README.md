@@ -15,7 +15,7 @@ Go HTTP client with TLS fingerprinting. Standard `net/http` types. No forks.
 ## Install
 
 ```
-go get github.com/mukuln-official/tls-fetch
+go get github.com/divinedev111/tls-fetch
 ```
 
 ## Quick Start
